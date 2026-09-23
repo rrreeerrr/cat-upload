@@ -1,0 +1,73 @@
+import requests
+import json
+text_image = input("Введите текст для картинки: ").strip()
+yandex_token = input ("Введите токен Яндекс.Диска: ").strip()
+
+group_name = "PYQA-142"
+from urllib.parse import quote
+def get_cat_image(text):
+    encoded_text = quote(text)
+    url = f"https://cataas.com/cat/says/{encoded_text}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.content
+    else:
+        print("Ошибка получения картинки")
+
+def create_folder(token, folder_name):
+    url = f"https://cloud-api.yandex.net/v1/disk/resources?path={folder_name}"
+    headers = {"Authorization": f"OAuth {token}"}
+    response = requests.get(url, headers=headers)
+    if response.status_code == 404:
+        response = requests.put(url, headers=headers)
+        if response.status_code not in [201, 200]:
+            print("Не удалось создать папку")
+    elif response.status_code != 200:
+        print("Ошибка проверки папки")
+    
+def upload_file_yandex(token, folder_name, file_name, file_data):
+    url_get_upload = "https://cloud-api.yandex.net/v1/disk/resources/upload"
+    params = {
+        "path": f"{folder_name}/{file_name}",
+        "overwrite": "true"
+    }
+    headers = {"Authorization": f"OAuth {token}"}
+    
+    response = requests.get(url_get_upload, headers=headers, params=params)
+    if response.status_code != 200:
+        print("Не удалось получить ссылку для загрузки")
+
+    upload_url = response.json()["href"]
+    
+    response = requests.put(upload_url, data=file_data)
+    if response.status_code != 201:
+        print("Ошибка загрузки файла")
+
+    return len(file_data)
+
+def save_json(filename, size_bytes, output_path="info.json"):
+    data = {
+        "filename": filename,
+        "size_bytes": size_bytes,
+        "size_kb": round(size_bytes / 1024, 2)
+    }
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+try:
+    print("Получаем картинку...")
+    image_data = get_cat_image(text_image)
+
+    print("Создаем папку на Яндекс.Диске...")
+    create_folder(yandex_token, group_name)
+
+    print("Загружаем файл...")
+    file_size = upload_file_yandex(yandex_token, group_name, text_image, image_data)
+
+    print("Сохраняем информацию в json...")
+    save_json(text_image, file_size)
+
+    print("Готово. Картинка загружена, json создан")
+
+except Exception as e:
+    print(f"Ошибка: {e}")
